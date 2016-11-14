@@ -214,8 +214,11 @@ class CouchbaseConnection
     {
         $bucket = $this->cbCluster->openBucket($bucketName);
         $result = $bucket->get($id);
+        $result = (array)$result->value;
+        unset($result[Table::ID_FIELD]);
+        $result = array_merge([Table::ID_FIELD => $id], $result);
 
-        return (array)$result->value;
+        return $result;
     }
 
     /**
