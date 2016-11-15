@@ -1,2 +1,2 @@
 # df-couchbase
-A DreamFactory service for Couchbase.
+A DreamFactory service for Couchbase database.
