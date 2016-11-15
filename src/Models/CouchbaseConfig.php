@@ -6,16 +6,16 @@ use DreamFactory\Core\Models\BaseServiceConfigModel;
 
 class CouchbaseConfig extends BaseServiceConfigModel
 {
-    /** @var string  */
+    /** @var string */
     protected $table = 'couchbase_config';
 
-    /** @var array  */
+    /** @var array */
     protected $fillable = ['service_id', 'host', 'username', 'password'];
 
-    /** @var array  */
+    /** @var array */
     protected $encrypted = ['password'];
 
-    /** @var array  */
+    /** @var array */
     protected $protected = ['password'];
 
     /** {@inheritdoc} */

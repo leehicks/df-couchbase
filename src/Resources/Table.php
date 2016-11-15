@@ -33,6 +33,7 @@ class Table extends BaseNoSqlDbTableResource
      */
     private $i = 1;
 
+    /** {@inheritdoc} */
     protected function getIdsInfo(
         $table,
         $fields_info = null,
@@ -47,6 +48,7 @@ class Table extends BaseNoSqlDbTableResource
         return $ids;
     }
 
+    /** {@inheritdoc} */
     protected function addToTransaction(
         $record = null,
         $id = null,
@@ -55,7 +57,6 @@ class Table extends BaseNoSqlDbTableResource
         $continue = false,
         $single = false
     ){
-        $ssFilters = array_get($extras, 'ss_filters');
         $fields = array_get($extras, ApiOptions::FIELDS);
         $requireMore = array_get($extras, 'require_more');
         $updates = array_get($extras, 'updates');
@@ -64,7 +65,6 @@ class Table extends BaseNoSqlDbTableResource
         try {
             switch ($this->getAction()) {
                 case Verbs::POST:
-                    $record = $this->parseRecord($record, $this->tableFieldsInfo, $ssFilters);
                     if (empty($record)) {
                         throw new BadRequestException('No valid fields were found in record.');
                     }
@@ -89,8 +89,7 @@ class Table extends BaseNoSqlDbTableResource
                         $record[static::ID_FIELD] = $id;
                     }
 
-                    $parsed = $this->parseRecord($record, $this->tableFieldsInfo, $ssFilters, true);
-                    if (empty($parsed)) {
+                    if (empty($record)) {
                         throw new BadRequestException('No valid fields were found in record.');
                     }
 
@@ -98,6 +97,7 @@ class Table extends BaseNoSqlDbTableResource
                     if ($rollback) {
                         $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
                         $this->addToRollback($old);
+
                         return parent::addToTransaction($record, $id);
                     }
 
@@ -107,7 +107,7 @@ class Table extends BaseNoSqlDbTableResource
                         $result = array_merge($record, $result);
                     }
 
-                    $out = static::cleanRecord($result, $fields);
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
 
                 case Verbs::MERGE:
@@ -123,15 +123,13 @@ class Table extends BaseNoSqlDbTableResource
                     $record = array_merge($old, $record);
 
                     // make sure record doesn't contain identifiers
-                    //unset($record[static::ID_FIELD]);
-                    $parsed = $this->parseRecord($record, $this->tableFieldsInfo, $ssFilters, true);
-                    if (empty($parsed)) {
+                    if (empty($record)) {
                         throw new BadRequestException('No valid fields were found in record.');
                     }
 
                     // only update/patch by ids can use batching
                     if (!$single && !$continue && !$rollback) {
-                        return parent::addToTransaction($parsed, $id);
+                        return parent::addToTransaction($record, $id);
                     }
                     // write back the changes
                     $result = $this->parent->getConnection()->updateDocument($this->transactionTable, $id, $record);
@@ -141,7 +139,7 @@ class Table extends BaseNoSqlDbTableResource
                     if ($requireMore) {
                         $result = array_merge($record, $result);
                     }
-                    $out = static::cleanRecord($result, $fields);
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
 
                 case Verbs::DELETE:
@@ -162,7 +160,7 @@ class Table extends BaseNoSqlDbTableResource
                     }
 
                     $result = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
-                    $out = static::cleanRecord($result, $fields);
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
             }
         } catch (\couchException $ex) {
@@ -172,6 +170,7 @@ class Table extends BaseNoSqlDbTableResource
         return $out;
     }
 
+    /** {@inheritdoc} */
     protected function commitTransaction($extras = null)
     {
         if (empty($this->batchRecords) && empty($this->batchIds)) {
@@ -312,6 +311,7 @@ class Table extends BaseNoSqlDbTableResource
         return $out;
     }
 
+    /** {@inheritdoc} */
     protected function rollbackTransaction()
     {
         if (!empty($this->rollbackRecords)) {
@@ -353,6 +353,13 @@ class Table extends BaseNoSqlDbTableResource
         return true;
     }
 
+    /**
+     * Excluding _id field from field list
+     *
+     * @param string $fields
+     *
+     * @return string
+     */
     protected static function cleanFields($fields)
     {
         $new = [];
@@ -366,6 +373,7 @@ class Table extends BaseNoSqlDbTableResource
         return implode(',', $new);
     }
 
+    /** {@inheritdoc} */
     public function retrieveRecordsByFilter($table, $filter = null, $params = [], $extras = [])
     {
         $this->transactionTable = $table;
@@ -419,6 +427,13 @@ class Table extends BaseNoSqlDbTableResource
         return $out;
     }
 
+    /**
+     * Cleaning Couchbase rows.
+     *
+     * @param array $records
+     *
+     * @return array
+     */
     protected function preCleanRecords($records)
     {
         $new = [];
@@ -438,6 +453,7 @@ class Table extends BaseNoSqlDbTableResource
         return $new;
     }
 
+    /** {@inheritdoc} */
     protected static function cleanRecord($record = [], $include = '*', $id_field = null)
     {
         if ('*' !== $include) {
@@ -481,6 +497,13 @@ class Table extends BaseNoSqlDbTableResource
         return $record;
     }
 
+    /**
+     * Checks to see if field is an expression
+     *
+     * @param string $field
+     *
+     * @return bool|string
+     */
     protected static function isExpression($field)
     {
         $alias = explode(' as ', $field);
