@@ -46,16 +46,18 @@ class Schema extends \DreamFactory\Core\Database\Schema\Schema
     /**
      * @inheritdoc
      */
-    public function createTable($table, $schema, $options = null)
+    public function createTable($table, $options)
     {
-        $data = ['name' => $table];
-
+        if (empty($tableName = array_get($table, 'name'))) {
+            throw new \Exception("No valid name exist in the received table schema.");
+        }
+        $data = ['name' => $tableName];
         foreach (CouchbaseConnection::$editableBucketProperties as $prop) {
-            if (isset($schema[$prop])) {
-                $data[$prop] = $schema[$prop];
+            if (null !== $option = array_get($table, $prop, array_get($table, 'native.' . $prop))) {
+                $data[$prop] = $option;
             }
         }
-        $result = $this->connection->createBucket($table, $data);
+        $result = $this->connection->createBucket($tableName, $data);
         if (isset($result['errors'])) {
             throw new InternalServerErrorException(null, null, null, $result);
         }
@@ -66,15 +68,18 @@ class Schema extends \DreamFactory\Core\Database\Schema\Schema
     /**
      * @inheritdoc
      */
-    protected function updateTable($table, $schema)
+    protected function updateTable($table, $changes)
     {
-        $data = ['name' => $table];
+        if (empty($tableName = array_get($table, 'name'))) {
+            throw new \Exception("No valid name exist in the received table schema.");
+        }
+        $data = ['name' => $tableName];
         foreach (CouchbaseConnection::$editableBucketProperties as $prop) {
-            if (isset($schema[$prop])) {
-                $data[$prop] = $schema[$prop];
+            if (null !== $option = array_get($table, $prop, array_get($table, 'native.' . $prop))) {
+                $data[$prop] = $option;
             }
         }
-        $this->connection->updateBucket($table, $data);
+        $this->connection->updateBucket($tableName, $data);
     }
 
     /**
