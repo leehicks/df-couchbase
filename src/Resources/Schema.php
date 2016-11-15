@@ -46,24 +46,20 @@ class Schema extends BaseNoSqlDbSchemaResource
             throw new BadRequestException("No 'name' field in data.");
         }
 
-        try {
-            $data = ['name' => $table];
+        $data = ['name' => $table];
 
-            foreach (CouchbaseConnection::$editableBucketProperties as $prop){
-                if(isset($properties[$prop])){
-                    $data[$prop] = $properties[$prop];
-                }
+        foreach (CouchbaseConnection::$editableBucketProperties as $prop){
+            if(isset($properties[$prop])){
+                $data[$prop] = $properties[$prop];
             }
-
-            $this->parent->getConnection()->createBucket($table, $data);
-            $this->refreshCachedTables();
-            return ['name' => $table];
-        } catch (\Exception $ex) {
-            if($ex->getCode() >= 400 && $ex->getCode() < 500){
-                throw $ex;
-            }
-            throw new InternalServerErrorException("Failed to create table '$table'.\n{$ex->getMessage()}");
         }
+
+        $result = $this->parent->getConnection()->createBucket($table, $data);
+        if(isset($result['errors'])){
+            throw new InternalServerErrorException(null, null, null, $result);
+        }
+        $this->refreshCachedTables();
+        return ['name' => $table];
     }
 
     public function updateTable($table, $properties, $allow_delete_fields = false, $return_schema = false)

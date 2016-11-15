@@ -13,11 +13,9 @@ use DreamFactory\Core\Exceptions\BadRequestException;
 use DreamFactory\Core\Exceptions\ForbiddenException;
 use DreamFactory\Library\Utility\Enums\Verbs;
 use DreamFactory\Core\Utility\ResourcesWrapper;
-use DreamFactory\Core\Enums\HttpStatusCodes;
 use DreamFactory\Core\Exceptions\RestException;
 use DreamFactory\Core\Exceptions\DfException;
 use DreamFactory\Core\Exceptions\NotFoundException;
-use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use Config;
 
 class Table extends BaseNoSqlDbTableResource
