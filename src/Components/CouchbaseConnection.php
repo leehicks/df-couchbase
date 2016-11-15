@@ -134,7 +134,7 @@ class CouchbaseConnection
         if(!isset($result['errors'])){
             $query = \CouchbaseN1qlQuery::fromString("CREATE PRIMARY INDEX ON `" . $name . "` USING GSI");
             $bucket = $this->cbCluster->openBucket($name);
-            $rs = $bucket->query($query);
+            $bucket->query($query);
         }
 
         return $result;
