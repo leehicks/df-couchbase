@@ -116,6 +116,7 @@ class Table extends BaseNoSqlDbTableResource
                         $record = $updates;
                     }
 
+                    $record[static::ID_FIELD] = $id;
                     // get all fields of record
                     $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
 
