@@ -72,7 +72,7 @@ class CouchbaseConnection
     protected static function buildDsn($host, $port)
     {
         $host = trim($host);
-        $dsn = static::DSN_PREFIX . $host . ':' . $port;
+        $dsn = static::DSN_PREFIX . $host . ':' . $port . '?detailed_errcodes=true';
 
         return $dsn;
     }
@@ -131,12 +131,6 @@ class CouchbaseConnection
     {
         $result = $this->cbClusterManager->createBucket($name, $options);
 
-        if(!isset($result['errors'])){
-            $query = \CouchbaseN1qlQuery::fromString("CREATE PRIMARY INDEX ON `" . $name . "` USING GSI");
-            $bucket = $this->cbCluster->openBucket($name);
-            $bucket->query($query);
-        }
-
         return $result;
     }
 
@@ -149,20 +143,21 @@ class CouchbaseConnection
      */
     public function updateBucket($name, array $options = [])
     {
-        $url = 'http://' . $this->host . '/pools/default/buckets/' . $name;
-        $options = [
+        $bucketInfo = $this->getBucketInfo($name);
+        $url = 'http://' . $this->host . array_get($bucketInfo, 'uri');
+        $curlOptions = [
             CURLOPT_URL            => $url,
             CURLOPT_PORT           => $this->port,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_VERBOSE        => false,
             CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $options,
+            CURLOPT_POSTFIELDS     => json_encode($options),
             CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
             CURLOPT_USERPWD        => $this->username . ":" . $this->password
         ];
 
         $ch = curl_init();
-        curl_setopt_array($ch, $options);
+        curl_setopt_array($ch, $curlOptions);
         curl_exec($ch);
         $rs = curl_getinfo($ch);
 
@@ -188,22 +183,40 @@ class CouchbaseConnection
     }
 
     /**
-     * @param string $bucket
+     * @param string $bucketName
      * @param string $sql
      * @param array  $params
      *
      * @return array
      */
-    public function query($bucket, $sql, $params = [])
+    public function query($bucketName, $sql, $params = [])
     {
-        $query = \CouchbaseN1qlQuery::fromString($sql);
-        if (!empty($params)) {
-            $query->namedParams($params);
-        }
-        $bucket = $this->cbCluster->openBucket($bucket);
-        $result = $bucket->query($query);
+        try {
+            $query = \CouchbaseN1qlQuery::fromString($sql);
+            if (!empty($params)) {
+                $query->namedParams($params);
+            }
+            $bucket = $this->cbCluster->openBucket($bucketName);
+            $result = $bucket->query($query);
 
-        return (array)$result;
+            return (array)$result;
+        } catch (\CouchbaseException $ce) {
+            // Bucket with no primary index (possibly)
+            // Create index and retry query.
+            if(59 === $ce->getCode() && strpos($ce->getMessage(), 'LCB_HTTP_ERROR') !== false){
+                $this->createPrimaryIndex($bucketName);
+                return $this->query($bucketName, $sql, $params);
+            }
+        }
+    }
+
+    public function createPrimaryIndex($bucketName)
+    {
+        $bucket = $this->cbCluster->openBucket($bucketName);
+        $manager = $bucket->manager();
+        $manager->createN1qlPrimaryIndex('', true);
+
+        return true;
     }
 
     /*********************************
@@ -236,6 +249,7 @@ class CouchbaseConnection
      */
     public function createDocument($bucketName, $id, $record)
     {
+        unset($record[Table::ID_FIELD]);
         $bucket = $this->cbCluster->openBucket($bucketName);
         $bucket->insert($id, $record);
 
@@ -251,6 +265,7 @@ class CouchbaseConnection
      */
     public function updateDocument($bucketName, $id, $record)
     {
+        unset($record[Table::ID_FIELD]);
         $bucket = $this->cbCluster->openBucket($bucketName);
         $bucket->upsert($id, $record);
 
@@ -266,6 +281,7 @@ class CouchbaseConnection
      */
     public function replaceDocument($bucketName, $id, $record)
     {
+        unset($record[Table::ID_FIELD]);
         $bucket = $this->cbCluster->openBucket($bucketName);
         $bucket->replace($id, $record);
 
