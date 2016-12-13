@@ -6,7 +6,7 @@ use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 
-class Schema extends \DreamFactory\Core\Database\Schema\Schema
+class Schema extends \DreamFactory\Core\Database\Components\Schema
 {
     /** @var CouchbaseConnection */
     protected $connection;
@@ -32,12 +32,14 @@ class Schema extends \DreamFactory\Core\Database\Schema\Schema
     /**
      * @inheritdoc
      */
-    protected function findTableNames($schema = '', $include_views = true)
+    protected function findTableNames($schema = '')
     {
         $tables = [];
         $buckets = $this->connection->listBuckets();
-        foreach ($buckets as $table) {
-            $tables[strtolower($table)] = new TableSchema(['name' => $table]);
+        foreach ($buckets as $name) {
+            $internalName = $quotedName = $tableName = $name;
+            $settings = compact('tableName', 'name', 'internalName','quotedName');
+            $tables[strtolower($name)] = new TableSchema($settings);
         }
 
         return $tables;

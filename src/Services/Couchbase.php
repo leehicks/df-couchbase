@@ -5,8 +5,8 @@ namespace DreamFactory\Core\Couchbase\Services;
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Couchbase\Database\Schema\Schema;
 use DreamFactory\Core\Couchbase\Resources\Table;
-use DreamFactory\Core\Resources\DbSchemaResource;
-use DreamFactory\Core\Services\BaseDbService;
+use DreamFactory\Core\Database\Resources\DbSchemaResource;
+use DreamFactory\Core\Database\Services\BaseDbService;
 use DreamFactory\Core\Utility\Session;
 
 class Couchbase extends BaseDbService
