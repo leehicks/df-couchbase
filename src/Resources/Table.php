@@ -693,7 +693,11 @@ class Table extends BaseNoSqlDbTableResource
         }
         // if not already a replacement parameter, evaluate it
         try {
-            $value = $this->parseValueForSet($value, $info);
+            switch ($info->dbType) {
+                case 'int':
+                    $value = intval($value);
+                    break;
+            }
         } catch (ForbiddenException $ex) {
             // need to prop this up?
         }
@@ -716,21 +720,5 @@ class Table extends BaseNoSqlDbTableResource
         $value = '$' . $key;
 
         return $value;
-    }
-
-    /**
-     * @param $value
-     * @param $field_info
-     *
-     * @return mixed
-     */
-    public function parseValueForSet($value, $field_info)
-    {
-        switch ($field_info->dbType) {
-            case 'int':
-                return intval($value);
-            default:
-                return $value;
-        }
     }
 }
