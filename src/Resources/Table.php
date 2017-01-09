@@ -119,7 +119,6 @@ class Table extends BaseNoSqlDbTableResource
                     $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
 
-                case Verbs::MERGE:
                 case Verbs::PATCH:
                     if (!empty($updates)) {
                         $record = $updates;
@@ -216,7 +215,6 @@ class Table extends BaseNoSqlDbTableResource
                 break;
 
             case Verbs::PUT:
-            case Verbs::MERGE:
             case Verbs::PATCH:
                 $result = [];
                 $records = $this->batchRecords;
@@ -336,7 +334,6 @@ class Table extends BaseNoSqlDbTableResource
                     break;
                 case Verbs::PUT:
                 case Verbs::PATCH:
-                case Verbs::MERGE:
                     foreach ($this->rollbackRecords as $rr) {
                         $id = array_get($rr, static::ID_FIELD);
                         if (!empty($id)) {
