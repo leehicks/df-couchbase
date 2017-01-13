@@ -68,18 +68,15 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     /**
      * @inheritdoc
      */
-    protected function updateTable($table, $changes)
+    protected function updateTable($tableSchema, $changes)
     {
-        if (empty($tableName = array_get($table, 'name'))) {
-            throw new \Exception("No valid name exist in the received table schema.");
-        }
-        $data = ['name' => $tableName];
+        $data = ['name' => $tableSchema->quotedName];
         foreach (CouchbaseConnection::$editableBucketProperties as $prop) {
-            if (null !== $option = array_get($table, $prop, array_get($table, 'native.' . $prop))) {
+            if (null !== $option = array_get($changes, $prop, array_get($changes, 'native.' . $prop))) {
                 $data[$prop] = $option;
             }
         }
-        $this->connection->updateBucket($tableName, $data);
+        $this->connection->updateBucket($tableSchema->quotedName, $data);
     }
 
     /**
