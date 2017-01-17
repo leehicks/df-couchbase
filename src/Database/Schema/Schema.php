@@ -6,7 +6,7 @@ use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 
-class Schema extends \DreamFactory\Core\Database\Schema\Schema
+class Schema extends \DreamFactory\Core\Database\Components\Schema
 {
     /** @var CouchbaseConnection */
     protected $connection;
@@ -32,12 +32,12 @@ class Schema extends \DreamFactory\Core\Database\Schema\Schema
     /**
      * @inheritdoc
      */
-    protected function findTableNames($schema = '', $include_views = true)
+    protected function findTableNames($schema = '')
     {
         $tables = [];
         $buckets = $this->connection->listBuckets();
-        foreach ($buckets as $table) {
-            $tables[strtolower($table)] = new TableSchema(['name' => $table]);
+        foreach ($buckets as $name) {
+            $tables[strtolower($name)] = new TableSchema(['name' => $name]);
         }
 
         return $tables;
@@ -68,18 +68,15 @@ class Schema extends \DreamFactory\Core\Database\Schema\Schema
     /**
      * @inheritdoc
      */
-    protected function updateTable($table, $changes)
+    protected function updateTable($tableSchema, $changes)
     {
-        if (empty($tableName = array_get($table, 'name'))) {
-            throw new \Exception("No valid name exist in the received table schema.");
-        }
-        $data = ['name' => $tableName];
+        $data = ['name' => $tableSchema->quotedName];
         foreach (CouchbaseConnection::$editableBucketProperties as $prop) {
-            if (null !== $option = array_get($table, $prop, array_get($table, 'native.' . $prop))) {
+            if (null !== $option = array_get($changes, $prop, array_get($changes, 'native.' . $prop))) {
                 $data[$prop] = $option;
             }
         }
-        $this->connection->updateBucket($tableName, $data);
+        $this->connection->updateBucket($tableSchema->quotedName, $data);
     }
 
     /**

@@ -3,7 +3,7 @@
   "description": "Couchbase database service for DreamFactory Platform 2.0",
   "keywords":    [
     "dreamfactory",
-    "dsp",
+    "api",
     "rest",
     "database",
     "NoSql",
@@ -28,7 +28,8 @@
     "wiki":   "https://wiki.dreamfactory.com"
   },
   "require":     {
-    "dreamfactory/df-core": "~0.6.0"
+    "dreamfactory/df-core":     "~0.7.0",
+    "dreamfactory/df-database": "~0.1.0"
   },
   "autoload":    {
     "psr-4": {
@@ -37,7 +38,7 @@
   },
   "extra":       {
     "branch-alias": {
-      "dev-develop": "0.1.x-dev"
+      "dev-develop": "0.2.x-dev"
     }
   }
 }

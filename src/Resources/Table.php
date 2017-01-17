@@ -2,8 +2,9 @@
 
 namespace DreamFactory\Core\Couchbase\Resources;
 
+use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Couchbase\Services\Couchbase;
-use DreamFactory\Core\Resources\BaseNoSqlDbTableResource;
+use DreamFactory\Core\Database\Resources\BaseNoSqlDbTableResource;
 use DreamFactory\Core\Enums\ApiOptions;
 use DreamFactory\Library\Utility\Scalar;
 use DreamFactory\Core\Enums\DbLogicalOperators;
@@ -32,6 +33,14 @@ class Table extends BaseNoSqlDbTableResource
      * @var int An internal counter
      */
     private $i = 1;
+
+    /**
+     * @return CouchbaseConnection
+     */
+    protected function getConnection()
+    {
+        return $this->parent->getConnection();
+    }
 
     /** {@inheritdoc} */
     protected function getIdsInfo(
@@ -73,7 +82,7 @@ class Table extends BaseNoSqlDbTableResource
                         return parent::addToTransaction($record, $id);
                     }
 
-                    $result = $this->parent->getConnection()->createDocument($this->transactionTable, $id, $record);
+                    $result = $this->getConnection()->createDocument($this->transactionTable, $id, $record);
 
                     if ($requireMore) {
                         // for returning latest _rev
@@ -95,13 +104,13 @@ class Table extends BaseNoSqlDbTableResource
 
                     $old = null;
                     if ($rollback) {
-                        $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                        $old = $this->getConnection()->getDocument($this->transactionTable, $id);
                         $this->addToRollback($old);
 
                         return parent::addToTransaction($record, $id);
                     }
 
-                    $result = $this->parent->getConnection()->replaceDocument($this->transactionTable, $id, $record);
+                    $result = $this->getConnection()->replaceDocument($this->transactionTable, $id, $record);
 
                     if ($requireMore) {
                         $result = array_merge($record, $result);
@@ -110,7 +119,6 @@ class Table extends BaseNoSqlDbTableResource
                     $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
 
-                case Verbs::MERGE:
                 case Verbs::PATCH:
                     if (!empty($updates)) {
                         $record = $updates;
@@ -118,7 +126,7 @@ class Table extends BaseNoSqlDbTableResource
 
                     $record[static::ID_FIELD] = $id;
                     // get all fields of record
-                    $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                    $old = $this->getConnection()->getDocument($this->transactionTable, $id);
 
                     // merge in changes from $record to $merge
                     $record = array_merge($old, $record);
@@ -133,7 +141,7 @@ class Table extends BaseNoSqlDbTableResource
                         return parent::addToTransaction($record, $id);
                     }
                     // write back the changes
-                    $result = $this->parent->getConnection()->updateDocument($this->transactionTable, $id, $record);
+                    $result = $this->getConnection()->updateDocument($this->transactionTable, $id, $record);
                     if ($rollback) {
                         $this->addToRollback($old);
                     }
@@ -147,11 +155,11 @@ class Table extends BaseNoSqlDbTableResource
                     if (!$single && !$continue && !$rollback) {
                         return parent::addToTransaction(null, $id);
                     }
-                    $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                    $old = $this->getConnection()->getDocument($this->transactionTable, $id);
                     if ($rollback) {
                         $this->addToRollback($old);
                     }
-                    $this->parent->getConnection()->deleteDocument($this->transactionTable, $id);
+                    $this->getConnection()->deleteDocument($this->transactionTable, $id);
                     $out = static::cleanRecord($old, $fields, static::ID_FIELD);
                     break;
 
@@ -160,7 +168,7 @@ class Table extends BaseNoSqlDbTableResource
                         return parent::addToTransaction(null, $id);
                     }
 
-                    $result = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                    $result = $this->getConnection()->getDocument($this->transactionTable, $id);
                     $out = static::cleanRecord($result, $fields, static::ID_FIELD);
                     break;
             }
@@ -189,7 +197,7 @@ class Table extends BaseNoSqlDbTableResource
                 foreach ($this->batchRecords as $record) {
                     $id = array_get($record, static::ID_FIELD);
                     unset($record[static::ID_FIELD]);
-                    $rs = $this->parent->getConnection()->createDocument(
+                    $rs = $this->getConnection()->createDocument(
                         $this->transactionTable,
                         $id,
                         $record
@@ -207,7 +215,6 @@ class Table extends BaseNoSqlDbTableResource
                 break;
 
             case Verbs::PUT:
-            case Verbs::MERGE:
             case Verbs::PATCH:
                 $result = [];
                 $records = $this->batchRecords;
@@ -215,7 +222,7 @@ class Table extends BaseNoSqlDbTableResource
                 foreach ($records as $record) {
                     $id = array_get($record, static::ID_FIELD);
                     unset($record[static::ID_FIELD]);
-                    $rs = $this->parent->getConnection()->replaceDocument($this->transactionTable, $id, $record);
+                    $rs = $this->getConnection()->replaceDocument($this->transactionTable, $id, $record);
                     if ($requireMore) {
                         $rs = array_merge($record, $rs);
                     }
@@ -231,14 +238,14 @@ class Table extends BaseNoSqlDbTableResource
                 foreach ($this->batchIds as $id) {
                     $old = [];
                     if ($requireMore || $rollback) {
-                        $old = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                        $old = $this->getConnection()->getDocument($this->transactionTable, $id);
                         if ($rollback) {
                             static::addToRollback($old);
                         }
                     }
 
                     try {
-                        $rs = $this->parent->getConnection()->deleteDocument($this->transactionTable, $id);
+                        $rs = $this->getConnection()->deleteDocument($this->transactionTable, $id);
                         if ($requireMore) {
                             $rs = array_merge($old, $rs);
                         }
@@ -274,7 +281,7 @@ class Table extends BaseNoSqlDbTableResource
                 $errors = [];
                 foreach ($this->batchIds as $id) {
                     try {
-                        $document = $this->parent->getConnection()->getDocument($this->transactionTable, $id);
+                        $document = $this->getConnection()->getDocument($this->transactionTable, $id);
                         $result[] = $document;
                     } catch (\Exception $e) {
                         if (strpos($e->getMessage(), 'LCB_KEY_ENOENT') !== false) {
@@ -321,17 +328,16 @@ class Table extends BaseNoSqlDbTableResource
                     foreach ($this->rollbackRecords as $rr) {
                         $id = array_get($rr, static::ID_FIELD);
                         if (!empty($id)) {
-                            $this->parent->getConnection()->deleteDocument($this->transactionTable, $id);
+                            $this->getConnection()->deleteDocument($this->transactionTable, $id);
                         }
                     }
                     break;
                 case Verbs::PUT:
                 case Verbs::PATCH:
-                case Verbs::MERGE:
                     foreach ($this->rollbackRecords as $rr) {
                         $id = array_get($rr, static::ID_FIELD);
                         if (!empty($id)) {
-                            $this->parent->getConnection()->replaceDocument($this->transactionTable, $id, $rr);
+                            $this->getConnection()->replaceDocument($this->transactionTable, $id, $rr);
                         }
                     }
                     break;
@@ -339,7 +345,7 @@ class Table extends BaseNoSqlDbTableResource
                     foreach ($this->rollbackRecords as $rr) {
                         $id = array_get($rr, static::ID_FIELD);
                         if (!empty($id)) {
-                            $this->parent->getConnection()->createDocument($this->transactionTable, $id, $rr);
+                            $this->getConnection()->createDocument($this->transactionTable, $id, $rr);
                         }
                     }
                     break;
@@ -416,7 +422,7 @@ class Table extends BaseNoSqlDbTableResource
         }
 
         $sql = $selectClause . $whereClause . $groupByClause . $orderByClause . $limitClause . $offsetClause;
-        $result = $this->parent->getConnection()->query($table, $sql, $params);
+        $result = $this->getConnection()->query($table, $sql, $params);
         $docs = $this->preCleanRecords(array_get($result, 'rows'));
         $idField = (empty($groupBy)) ? static::ID_FIELD : null;
         $out = static::cleanRecords($docs, $fields, $idField);
@@ -684,7 +690,11 @@ class Table extends BaseNoSqlDbTableResource
         }
         // if not already a replacement parameter, evaluate it
         try {
-            $value = $this->parseValueForSet($value, $info);
+            switch ($info->dbType) {
+                case 'int':
+                    $value = intval($value);
+                    break;
+            }
         } catch (ForbiddenException $ex) {
             // need to prop this up?
         }
@@ -707,21 +717,5 @@ class Table extends BaseNoSqlDbTableResource
         $value = '$' . $key;
 
         return $value;
-    }
-
-    /**
-     * @param $value
-     * @param $field_info
-     *
-     * @return mixed
-     */
-    public function parseValueForSet($value, $field_info)
-    {
-        switch ($field_info->dbType) {
-            case 'int':
-                return intval($value);
-            default:
-                return $value;
-        }
     }
 }
