@@ -203,8 +203,10 @@ class CouchbaseConnection
         } catch (\CouchbaseException $ce) {
             // Bucket with no primary index (possibly)
             // Create index and retry query.
-            if(59 === $ce->getCode() && strpos($ce->getMessage(), 'LCB_HTTP_ERROR') !== false){
+            if ((59 === $ce->getCode() && strpos($ce->getMessage(), 'LCB_HTTP_ERROR') !== false) ||
+                (4000 === $ce->getCode() && strpos($ce->getMessage(), 'No primary index on keyspace') !== false)) {
                 $this->createPrimaryIndex($bucketName);
+
                 return $this->query($bucketName, $sql, $params);
             }
         }
