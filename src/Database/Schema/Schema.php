@@ -2,8 +2,8 @@
 
 namespace DreamFactory\Core\Couchbase\Database\Schema;
 
-use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
+use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 
 class Schema extends \DreamFactory\Core\Database\Components\Schema
@@ -16,8 +16,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
      */
     protected function findColumns(TableSchema $table)
     {
-        $table->native = $this->connection->getBucketInfo($table->name);
-        $columns = [
+        return [
             [
                 'name'           => '_id',
                 'db_type'        => 'string',
@@ -25,8 +24,6 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
                 'auto_increment' => false,
             ]
         ];
-
-        return $columns;
     }
 
     /**
@@ -35,9 +32,10 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     protected function findTableNames($schema = '')
     {
         $tables = [];
-        $buckets = $this->connection->listBuckets();
-        foreach ($buckets as $name) {
-            $tables[strtolower($name)] = new TableSchema(['name' => $name]);
+        $buckets = $this->connection->getCbClusterManager()->listBuckets();
+        foreach ($buckets as $bucket) {
+            $name = array_get($bucket, 'name');
+            $tables[strtolower($name)] = new TableSchema(['name' => $name, 'native' => $bucket]);
         }
 
         return $tables;
@@ -57,7 +55,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
                 $data[$prop] = $option;
             }
         }
-        $result = $this->connection->createBucket($tableName, $data);
+        $result = $this->connection->getCbClusterManager()->createBucket($tableName, $data);
         if (isset($result['errors'])) {
             throw new InternalServerErrorException(null, null, null, $result);
         }
@@ -84,7 +82,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
      */
     public function dropTable($table)
     {
-        return $this->connection->deleteBucket($table);
+        return $this->connection->getCbClusterManager()->removeBucket($table);
     }
 
     /**

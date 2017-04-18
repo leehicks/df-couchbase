@@ -4,7 +4,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
+- Support saslPassword access for buckets
+
 ### Changed
+- Rewrite to conform to other database service layouts
+
 ### Fixed
 
 ## [0.3.0] - 2017-03-03
