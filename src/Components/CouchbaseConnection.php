@@ -3,7 +3,6 @@
 namespace DreamFactory\Core\Couchbase\Components;
 
 use CouchbaseCluster;
-use DreamFactory\Core\Couchbase\Resources\Table;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use DreamFactory\Library\Utility\ArrayUtils;
 
@@ -64,6 +63,22 @@ class CouchbaseConnection
     }
 
     /**
+     * @return CouchbaseCluster|null
+     */
+    public function getCbCluster()
+    {
+        return $this->cbCluster;
+    }
+
+    /**
+     * @return \CouchbaseClusterManager|null
+     */
+    public function getCbClusterManager()
+    {
+        return $this->cbClusterManager;
+    }
+
+    /**
      * @param string  $host
      * @param integer $port
      *
@@ -82,59 +97,6 @@ class CouchbaseConnection
      *********************************/
 
     /**
-     * @param bool $details
-     *
-     * @return array|mixed
-     */
-    public function listBuckets($details = false)
-    {
-        $buckets = $this->cbClusterManager->listBuckets();
-
-        if (true === $details) {
-            return $buckets;
-        } else {
-            $list = [];
-            foreach ($buckets as $bucket) {
-                $list[] = array_get($bucket, 'name');
-            }
-
-            return $list;
-        }
-    }
-
-    /**
-     * @param string $name
-     *
-     * @return null
-     */
-    public function getBucketInfo($name)
-    {
-        $buckets = $this->listBuckets(true);
-        $bucket = ArrayUtils::findByKeyValue($buckets, 'name', $name);
-        if (!empty(array_get($bucket, 'saslPassword'))) {
-            array_set($bucket, 'saslPassword', '********');
-        }
-        if (null !== array_get($bucket, 'vBucketServerMap.vBucketMap')) {
-            array_set($bucket, 'vBucketServerMap.vBucketMap', '--HIDDEN-BY-DF--');
-        }
-
-        return $bucket;
-    }
-
-    /**
-     * @param string $name
-     * @param array  $options
-     *
-     * @return mixed
-     */
-    public function createBucket($name, array $options = [])
-    {
-        $result = $this->cbClusterManager->createBucket($name, $options);
-
-        return $result;
-    }
-
-    /**
      * @param string $name
      * @param array  $options
      *
@@ -143,7 +105,8 @@ class CouchbaseConnection
      */
     public function updateBucket($name, array $options = [])
     {
-        $bucketInfo = $this->getBucketInfo($name);
+        $buckets = $this->cbClusterManager->listBuckets();
+        $bucketInfo = ArrayUtils::findByKeyValue($buckets, 'name', $name);
         $url = 'http://' . $this->host . array_get($bucketInfo, 'uri');
         $curlOptions = [
             CURLOPT_URL            => $url,
@@ -172,133 +135,12 @@ class CouchbaseConnection
 
     /**
      * @param string $name
+     * @param string $password
      *
-     * @return mixed
+     * @return \CouchbaseBucket
      */
-    public function deleteBucket($name)
+    public function openBucket($name, $password = '')
     {
-        $result = $this->cbClusterManager->removeBucket($name);
-
-        return $result;
-    }
-
-    /**
-     * @param string $bucketName
-     * @param string $sql
-     * @param array  $params
-     *
-     * @return array
-     */
-    public function query($bucketName, $sql, $params = [])
-    {
-        try {
-            $query = \CouchbaseN1qlQuery::fromString($sql);
-            if (!empty($params)) {
-                $query->namedParams($params);
-            }
-            $bucket = $this->cbCluster->openBucket($bucketName);
-            $result = $bucket->query($query);
-
-            return (array)$result;
-        } catch (\CouchbaseException $ce) {
-            // Bucket with no primary index (possibly)
-            // Create index and retry query.
-            if(59 === $ce->getCode() && strpos($ce->getMessage(), 'LCB_HTTP_ERROR') !== false){
-                $this->createPrimaryIndex($bucketName);
-                return $this->query($bucketName, $sql, $params);
-            }
-        }
-    }
-
-    public function createPrimaryIndex($bucketName)
-    {
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $manager = $bucket->manager();
-        $manager->createN1qlPrimaryIndex('', true);
-
-        return true;
-    }
-
-    /*********************************
-     * Document operations
-     *********************************/
-
-    /**
-     * @param string $bucketName
-     * @param mixed  $id
-     *
-     * @return array
-     */
-    public function getDocument($bucketName, $id)
-    {
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $result = $bucket->get($id);
-        $result = (array)$result->value;
-        unset($result[Table::ID_FIELD]);
-        $result = array_merge([Table::ID_FIELD => $id], $result);
-
-        return $result;
-    }
-
-    /**
-     * @param string $bucketName
-     * @param mixed  $id
-     * @param array  $record
-     *
-     * @return array
-     */
-    public function createDocument($bucketName, $id, $record)
-    {
-        unset($record[Table::ID_FIELD]);
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $bucket->insert($id, $record);
-
-        return [Table::ID_FIELD => $id];
-    }
-
-    /**
-     * @param string $bucketName
-     * @param mixed  $id
-     * @param array  $record
-     *
-     * @return array
-     */
-    public function updateDocument($bucketName, $id, $record)
-    {
-        unset($record[Table::ID_FIELD]);
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $bucket->upsert($id, $record);
-
-        return [Table::ID_FIELD => $id];
-    }
-
-    /**
-     * @param string $bucketName
-     * @param mixed  $id
-     * @param array  $record
-     *
-     * @return array
-     */
-    public function replaceDocument($bucketName, $id, $record)
-    {
-        unset($record[Table::ID_FIELD]);
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $bucket->replace($id, $record);
-
-        return [Table::ID_FIELD => $id];
-    }
-
-    /**
-     * @param string $bucketName
-     * @param mixed  $id
-     *
-     * @return array
-     */
-    public function deleteDocument($bucketName, $id)
-    {
-        $bucket = $this->cbCluster->openBucket($bucketName);
-        $bucket->remove($id);
-
-        return [Table::ID_FIELD => $id];
+        return $this->cbCluster->openBucket($name, $password);
     }
 }

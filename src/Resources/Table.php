@@ -6,6 +6,7 @@ use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Couchbase\Services\Couchbase;
 use DreamFactory\Core\Database\Resources\BaseNoSqlDbTableResource;
 use DreamFactory\Core\Enums\ApiOptions;
+use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use DreamFactory\Library\Utility\Scalar;
 use DreamFactory\Core\Enums\DbLogicalOperators;
 use DreamFactory\Core\Enums\DbComparisonOperators;
@@ -13,11 +14,7 @@ use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Exceptions\BadRequestException;
 use DreamFactory\Core\Exceptions\ForbiddenException;
 use DreamFactory\Library\Utility\Enums\Verbs;
-use DreamFactory\Core\Utility\ResourcesWrapper;
 use DreamFactory\Core\Exceptions\RestException;
-use DreamFactory\Core\Exceptions\DfException;
-use DreamFactory\Core\Exceptions\NotFoundException;
-use Config;
 
 class Table extends BaseNoSqlDbTableResource
 {
@@ -28,6 +25,11 @@ class Table extends BaseNoSqlDbTableResource
      * @var null|Couchbase
      */
     protected $parent = null;
+
+    /**
+     * @var null|\CouchbaseBucket
+     */
+    protected $transactionBucket = null;
 
     /**
      * @var int An internal counter
@@ -42,13 +44,11 @@ class Table extends BaseNoSqlDbTableResource
         return $this->parent->getConnection();
     }
 
-    /** {@inheritdoc} */
-    protected function getIdsInfo(
-        $table,
-        $fields_info = null,
-        &$requested_fields = null,
-        $requested_types = null
-    ){
+    /**
+     * {@inheritdoc}
+     */
+    protected function getIdsInfo($table, $fields_info = null, &$requested_fields = null, $requested_types = null)
+    {
         $requested_fields = [static::ID_FIELD]; // can only be this
         $ids = [
             new ColumnSchema(['name' => static::ID_FIELD, 'type' => 'string', 'required' => true]),
@@ -57,336 +57,15 @@ class Table extends BaseNoSqlDbTableResource
         return $ids;
     }
 
-    /** {@inheritdoc} */
-    protected function addToTransaction(
-        $record = null,
-        $id = null,
-        $extras = null,
-        $rollback = false,
-        $continue = false,
-        $single = false
-    ){
-        $fields = array_get($extras, ApiOptions::FIELDS);
-        $requireMore = array_get($extras, 'require_more');
-        $updates = array_get($extras, 'updates');
-
-        $out = [];
-        try {
-            switch ($this->getAction()) {
-                case Verbs::POST:
-                    if (empty($record)) {
-                        throw new BadRequestException('No valid fields were found in record.');
-                    }
-
-                    if ($rollback) {
-                        return parent::addToTransaction($record, $id);
-                    }
-
-                    $result = $this->getConnection()->createDocument($this->transactionTable, $id, $record);
-
-                    if ($requireMore) {
-                        // for returning latest _rev
-                        $result = array_merge($record, $result);
-                    }
-
-                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
-                    break;
-
-                case Verbs::PUT:
-                    if (!empty($updates)) {
-                        $record = $updates;
-                        $record[static::ID_FIELD] = $id;
-                    }
-
-                    if (empty($record)) {
-                        throw new BadRequestException('No valid fields were found in record.');
-                    }
-
-                    $old = null;
-                    if ($rollback) {
-                        $old = $this->getConnection()->getDocument($this->transactionTable, $id);
-                        $this->addToRollback($old);
-
-                        return parent::addToTransaction($record, $id);
-                    }
-
-                    $result = $this->getConnection()->replaceDocument($this->transactionTable, $id, $record);
-
-                    if ($requireMore) {
-                        $result = array_merge($record, $result);
-                    }
-
-                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
-                    break;
-
-                case Verbs::PATCH:
-                    if (!empty($updates)) {
-                        $record = $updates;
-                    }
-
-                    $record[static::ID_FIELD] = $id;
-                    // get all fields of record
-                    $old = $this->getConnection()->getDocument($this->transactionTable, $id);
-
-                    // merge in changes from $record to $merge
-                    $record = array_merge($old, $record);
-
-                    // make sure record doesn't contain identifiers
-                    if (empty($record)) {
-                        throw new BadRequestException('No valid fields were found in record.');
-                    }
-
-                    // only update/patch by ids can use batching
-                    if (!$single && !$continue && !$rollback) {
-                        return parent::addToTransaction($record, $id);
-                    }
-                    // write back the changes
-                    $result = $this->getConnection()->updateDocument($this->transactionTable, $id, $record);
-                    if ($rollback) {
-                        $this->addToRollback($old);
-                    }
-                    if ($requireMore) {
-                        $result = array_merge($record, $result);
-                    }
-                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
-                    break;
-
-                case Verbs::DELETE:
-                    if (!$single && !$continue && !$rollback) {
-                        return parent::addToTransaction(null, $id);
-                    }
-                    $old = $this->getConnection()->getDocument($this->transactionTable, $id);
-                    if ($rollback) {
-                        $this->addToRollback($old);
-                    }
-                    $this->getConnection()->deleteDocument($this->transactionTable, $id);
-                    $out = static::cleanRecord($old, $fields, static::ID_FIELD);
-                    break;
-
-                case Verbs::GET:
-                    if (!$single) {
-                        return parent::addToTransaction(null, $id);
-                    }
-
-                    $result = $this->getConnection()->getDocument($this->transactionTable, $id);
-                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
-                    break;
-            }
-        } catch (\couchException $ex) {
-            throw new RestException($ex->getCode(), $ex->getMessage());
-        }
-
-        return $out;
-    }
-
-    /** {@inheritdoc} */
-    protected function commitTransaction($extras = null)
-    {
-        if (empty($this->batchRecords) && empty($this->batchIds)) {
-            return null;
-        }
-        $rollback = Scalar::boolval(array_get($extras, 'rollback'));
-        $continue = Scalar::boolval(array_get($extras, 'continue'));
-        $fields = array_get($extras, ApiOptions::FIELDS);
-        $requireMore = array_get($extras, 'require_more');
-
-        $out = [];
-        switch ($this->getAction()) {
-            case Verbs::POST:
-                $result = [];
-                foreach ($this->batchRecords as $record) {
-                    $id = array_get($record, static::ID_FIELD);
-                    unset($record[static::ID_FIELD]);
-                    $rs = $this->getConnection()->createDocument(
-                        $this->transactionTable,
-                        $id,
-                        $record
-                    );
-                    if ($rollback) {
-                        static::addToRollback($rs);
-                    }
-                    if ($requireMore) {
-                        $rs = array_merge($record, $rs);
-                    }
-                    $result[] = $rs;
-                }
-
-                $out = static::cleanRecords($result, $fields, static::ID_FIELD);
-                break;
-
-            case Verbs::PUT:
-            case Verbs::PATCH:
-                $result = [];
-                $records = $this->batchRecords;
-
-                foreach ($records as $record) {
-                    $id = array_get($record, static::ID_FIELD);
-                    unset($record[static::ID_FIELD]);
-                    $rs = $this->getConnection()->replaceDocument($this->transactionTable, $id, $record);
-                    if ($requireMore) {
-                        $rs = array_merge($record, $rs);
-                    }
-                    $result[] = $rs;
-                }
-
-                $out = static::cleanRecords($result, $fields, static::ID_FIELD);
-                break;
-
-            case Verbs::DELETE:
-                $result = [];
-                $errors = [];
-                foreach ($this->batchIds as $id) {
-                    $old = [];
-                    if ($requireMore || $rollback) {
-                        $old = $this->getConnection()->getDocument($this->transactionTable, $id);
-                        if ($rollback) {
-                            static::addToRollback($old);
-                        }
-                    }
-
-                    try {
-                        $rs = $this->getConnection()->deleteDocument($this->transactionTable, $id);
-                        if ($requireMore) {
-                            $rs = array_merge($old, $rs);
-                        }
-                        $result[] = $rs;
-                    } catch (\Exception $e) {
-                        if (false === $continue && false === $rollback) {
-                            throw $e;
-                        } else {
-                            $result[] = $e->getMessage();
-                            $errors[] = (!count($result)) ?: count($result) - 1;
-
-                            if (true === $rollback) {
-                                if ($e instanceof DfException) {
-                                    $e->setContext(['error' => $errors, ResourcesWrapper::getWrapper() => $result]);
-                                    $e->setMessage('Batch Error: Not all requested records could be deleted.');
-                                }
-                                throw $e;
-                            }
-                        }
-                    }
-                }
-
-                if (!empty($errors)) {
-                    $context = ['error' => $errors, ResourcesWrapper::getWrapper() => $result];
-                    throw new BadRequestException('Batch Error: Not all requested records could be deleted.', null, null, $context);
-                }
-
-                $out = static::cleanRecords($result, $fields, static::ID_FIELD);
-                break;
-
-            case Verbs::GET:
-                $result = [];
-                $errors = [];
-                foreach ($this->batchIds as $id) {
-                    try {
-                        $document = $this->getConnection()->getDocument($this->transactionTable, $id);
-                        $result[] = $document;
-                    } catch (\Exception $e) {
-                        if (strpos($e->getMessage(), 'LCB_KEY_ENOENT') !== false) {
-                            if (count($this->batchIds) > 1) {
-                                $result[] = "Record with identifier '" . $id . "' not found.";
-                                $errors[] = (!count($result)) ?: count($result) - 1;
-                            } else {
-                                throw new NotFoundException("Record with identifier '" .
-                                    $id .
-                                    "' not found." .
-                                    $e->getMessage());
-                            }
-                        } else {
-                            throw $e;
-                        }
-                    }
-                }
-
-                if (!empty($errors)) {
-                    $context = ['error' => $errors, ResourcesWrapper::getWrapper() => $result];
-                    throw new NotFoundException('Batch Error: Not all requested records could be retrieved.', null, null,
-                        $context);
-                }
-
-                $out = static::cleanRecords($result, $fields, static::ID_FIELD);
-                break;
-
-            default:
-                break;
-        }
-
-        $this->batchIds = [];
-        $this->batchRecords = [];
-
-        return $out;
-    }
-
-    /** {@inheritdoc} */
-    protected function rollbackTransaction()
-    {
-        if (!empty($this->rollbackRecords)) {
-            switch ($this->getAction()) {
-                case Verbs::POST:
-                    foreach ($this->rollbackRecords as $rr) {
-                        $id = array_get($rr, static::ID_FIELD);
-                        if (!empty($id)) {
-                            $this->getConnection()->deleteDocument($this->transactionTable, $id);
-                        }
-                    }
-                    break;
-                case Verbs::PUT:
-                case Verbs::PATCH:
-                    foreach ($this->rollbackRecords as $rr) {
-                        $id = array_get($rr, static::ID_FIELD);
-                        if (!empty($id)) {
-                            $this->getConnection()->replaceDocument($this->transactionTable, $id, $rr);
-                        }
-                    }
-                    break;
-                case Verbs::DELETE:
-                    foreach ($this->rollbackRecords as $rr) {
-                        $id = array_get($rr, static::ID_FIELD);
-                        if (!empty($id)) {
-                            $this->getConnection()->createDocument($this->transactionTable, $id, $rr);
-                        }
-                    }
-                    break;
-                default:
-                    // nothing to do here, rollback handled on bulk calls
-                    break;
-            }
-
-            $this->rollbackRecords = [];
-        }
-
-        return true;
-    }
-
     /**
-     * Excluding _id field from field list
-     *
-     * @param string $fields
-     *
-     * @return string
+     * {@inheritdoc}
      */
-    protected static function cleanFields($fields)
-    {
-        $new = [];
-        $fieldList = explode(',', $fields);
-        foreach ($fieldList as $f) {
-            if (static::ID_FIELD !== trim(strtolower($f))) {
-                $new[] = $f;
-            }
-        }
-
-        return implode(',', $new);
-    }
-
-    /** {@inheritdoc} */
     public function retrieveRecordsByFilter($table, $filter = null, $params = [], $extras = [])
     {
         $this->transactionTable = $table;
         $fields = array_get($extras, ApiOptions::FIELDS);
         $includeCounts = Scalar::boolval(array_get($extras, ApiOptions::INCLUDE_COUNT));
-        $limit = array_get($extras, 'limit', Config::get('df.db.max_records_returned'));
+        $limit = array_get($extras, 'limit', static::getMaxRecordsReturnedLimit());
         $offset = array_get($extras, 'offset');
         $orderBy = array_get($extras, 'order_by');
         $groupBy = array_get($extras, 'group_by');
@@ -399,6 +78,7 @@ class Table extends BaseNoSqlDbTableResource
             }
         }
 
+        /** @noinspection SqlNoDataSourceInspection */
         $selectClause = "SELECT $fieldsSql FROM `$table` ";
         $whereClause = "";
         $groupByClause = "";
@@ -422,16 +102,57 @@ class Table extends BaseNoSqlDbTableResource
         }
 
         $sql = $selectClause . $whereClause . $groupByClause . $orderByClause . $limitClause . $offsetClause;
-        $result = $this->getConnection()->query($table, $sql, $params);
-        $docs = $this->preCleanRecords(array_get($result, 'rows'));
-        $idField = (empty($groupBy)) ? static::ID_FIELD : null;
-        $out = static::cleanRecords($docs, $fields, $idField);
+        $out = [];
+        if ($bucket = $this->getBucket($this->getTableSchema(null,$table))) {
+            try {
+                $query = \CouchbaseN1qlQuery::fromString($sql);
+                if (!empty($params)) {
+                    $query->namedParams($params);
+                }
+                $result = $bucket->query($query);
+            } catch (\CouchbaseException $ce) {
+                // Bucket with no primary index (possibly)
+                // Create index and retry query.
+                if ((59 === $ce->getCode() && strpos($ce->getMessage(), 'LCB_HTTP_ERROR') !== false) ||
+                    (4000 === $ce->getCode() && strpos($ce->getMessage(), 'index') !== false)) {
+                        $manager = $bucket->manager();
+                        $manager->createN1qlPrimaryIndex('', true);
 
-        if (true === $includeCounts) {
-            $out['meta']['count'] = intval(array_get($result, 'metrics.resultCount'));
+                    $result = $bucket->query($query);
+                } else {
+                    throw new InternalServerErrorException($ce->getMessage(), $ce->getCode());
+                }
+            }
+            $docs = $this->preCleanRecords((array)array_get((array)$result, 'rows'));
+            $idField = (empty($groupBy)) ? static::ID_FIELD : null;
+            $out = static::cleanRecords($docs, $fields, $idField);
+        }
+
+        if ($includeCounts) {
+            $out['meta']['count'] = intval(array_get((array)$result, 'metrics.resultCount'));
         }
 
         return $out;
+    }
+
+    /**
+     * Excluding _id field from field list
+     *
+     * @param string $fields
+     *
+     * @return string
+     */
+    protected static function cleanFields($fields)
+    {
+        $new = [];
+        $fieldList = explode(',', $fields);
+        foreach ($fieldList as $f) {
+            if (static::ID_FIELD !== trim(strtolower($f))) {
+                $new[] = $f;
+            }
+        }
+
+        return implode(',', $new);
     }
 
     /**
@@ -460,7 +181,9 @@ class Table extends BaseNoSqlDbTableResource
         return $new;
     }
 
-    /** {@inheritdoc} */
+    /**
+     * {@inheritdoc}
+     */
     protected static function cleanRecord($record = [], $include = '*', $id_field = null)
     {
         if ('*' !== $include) {
@@ -717,5 +440,228 @@ class Table extends BaseNoSqlDbTableResource
         $value = '$' . $key;
 
         return $value;
+    }
+
+    protected function getBucket($table_schema)
+    {
+        $password = '';
+        if ('sasl' === array_get($table_schema->native, 'authType')) {
+            $password = array_get($table_schema->native, 'saslPassword', '');
+        }
+
+        return $this->getConnection()->openBucket($table_schema->name, $password);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function initTransaction($table_name, &$id_fields = null, $id_types = null, $require_ids = true)
+    {
+        $result = parent::initTransaction($table_name, $id_fields, $id_types, $require_ids);
+
+        $this->transactionBucket = $this->getBucket($this->transactionTableSchema);
+
+        return $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function addToTransaction(
+        $record = null,
+        $id = null,
+        $extras = null,
+        $rollback = false,
+        $continue = false,
+        $single = false
+    ) {
+        $fields = array_get($extras, ApiOptions::FIELDS);
+        $requireMore = array_get($extras, 'require_more');
+        $updates = array_get($extras, 'updates');
+
+        $out = [];
+        try {
+            switch ($this->getAction()) {
+                case Verbs::POST:
+                    if (empty($record)) {
+                        throw new BadRequestException('No valid fields were found in record.');
+                    }
+
+                    unset($record[Table::ID_FIELD]);
+                    $result = $this->transactionBucket->insert($id, $record);
+                    $result = [Table::ID_FIELD => $id];
+
+                    if ($requireMore) {
+                        // for returning latest _rev
+                        $result = array_merge($record, $result);
+                    }
+
+                    if ($rollback) {
+                        return parent::addToTransaction($record, $id);
+                    }
+
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
+                    break;
+
+                case Verbs::PUT:
+                    if (!empty($updates)) {
+                        $record = $updates;
+                        $record[static::ID_FIELD] = $id;
+                    }
+
+                    if (empty($record)) {
+                        throw new BadRequestException('No valid fields were found in record.');
+                    }
+
+                    $old = null;
+                    if ($rollback) {
+                        $result = $this->transactionBucket->get($id);
+                        $old = array_merge([static::ID_FIELD => $id], (array)$result->value);
+                        $this->addToRollback($old);
+                    }
+
+                    if ($this->parent->upsertAllowed()) {
+                        $result = $this->transactionBucket->upsert($id, $record);
+                    } else {
+                        $result = $this->transactionBucket->replace($id, $record);
+                    }
+
+                    if ($requireMore) {
+                        $result = array_merge($record, $result);
+                    }
+
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
+                    break;
+
+                case Verbs::PATCH:
+                    if (!empty($updates)) {
+                        $record = $updates;
+                    }
+
+                    $record[static::ID_FIELD] = $id;
+                    // get all fields of record
+                    $result = $this->transactionBucket->get($id);
+                    $old = (array)$result->value;
+
+                    // merge in changes from $record to $merge
+                    $record = array_merge($old, $record);
+
+                    // make sure record doesn't contain identifiers
+                    if (empty($record)) {
+                        throw new BadRequestException('No valid fields were found in record.');
+                    }
+
+                    // write back the changes
+                    $result = $this->transactionBucket->replace($id, $record);
+                    if ($rollback) {
+                        $this->addToRollback($old);
+                    }
+                    if ($requireMore) {
+                        $result = array_merge($record, $result);
+                    }
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
+                    break;
+
+                case Verbs::DELETE:
+                    $result = $this->transactionBucket->get($id);
+                    $old = array_merge([static::ID_FIELD => $id], (array)$result->value);
+                    if ($rollback) {
+                        $this->addToRollback($old);
+                    }
+
+                    $this->transactionBucket->remove($id);
+                    $out = static::cleanRecord($old, $fields, static::ID_FIELD);
+                    break;
+
+                case Verbs::GET:
+                    $result = $this->transactionBucket->get($id);
+                    $result = array_merge([static::ID_FIELD => $id], (array)$result->value);
+                    $out = static::cleanRecord($result, $fields, static::ID_FIELD);
+                    break;
+            }
+        } catch (\couchException $ex) {
+            throw new RestException($ex->getCode(), $ex->getMessage());
+        }
+
+        return $out;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function commitTransaction($extras = null)
+    {
+        if (empty($this->batchRecords) && empty($this->batchIds)) {
+            return null;
+        }
+
+        $out = [];
+        switch ($this->getAction()) {
+            case Verbs::POST:
+                break;
+
+            case Verbs::PUT:
+            case Verbs::PATCH:
+                break;
+
+            case Verbs::DELETE:
+                break;
+
+            case Verbs::GET:
+                break;
+
+            default:
+                break;
+        }
+
+        $this->batchIds = [];
+        $this->batchRecords = [];
+
+        return $out;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function rollbackTransaction()
+    {
+        if (!empty($this->rollbackRecords)) {
+            switch ($this->getAction()) {
+                case Verbs::POST:
+                    foreach ($this->rollbackRecords as $rr) {
+                        $id = array_get($rr, static::ID_FIELD);
+                        if (!empty($id)) {
+                            $this->transactionBucket->remove($id);
+                        }
+                    }
+                    break;
+                case Verbs::PUT:
+                case Verbs::PATCH:
+                    foreach ($this->rollbackRecords as $rr) {
+                        $id = array_get($rr, static::ID_FIELD);
+                        if (!empty($id)) {
+                            unset($rr[static::ID_FIELD]);
+                            $this->transactionBucket->replace($id, $rr);
+                        }
+                    }
+                    break;
+                case Verbs::DELETE:
+                    foreach ($this->rollbackRecords as $rr) {
+                        $id = array_get($rr, static::ID_FIELD);
+                        if (!empty($id)) {
+                            unset($rr[static::ID_FIELD]);
+                            $this->transactionBucket->insert($id, $rr);
+                        }
+                    }
+                    break;
+                default:
+                    // nothing to do here, rollback handled on bulk calls
+                    break;
+            }
+
+            $this->rollbackRecords = [];
+        }
+
+        return true;
     }
 }

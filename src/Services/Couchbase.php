@@ -3,9 +3,8 @@
 namespace DreamFactory\Core\Couchbase\Services;
 
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
-use DreamFactory\Core\Couchbase\Database\Schema\Schema;
+use DreamFactory\Core\Couchbase\Resources\Schema;
 use DreamFactory\Core\Couchbase\Resources\Table;
-use DreamFactory\Core\Database\Resources\DbSchemaResource;
 use DreamFactory\Core\Database\Services\BaseDbService;
 use DreamFactory\Core\Utility\Session;
 
@@ -15,9 +14,9 @@ class Couchbase extends BaseDbService
      * @var array
      */
     protected static $resources = [
-        DbSchemaResource::RESOURCE_NAME => [
-            'name'       => DbSchemaResource::RESOURCE_NAME,
-            'class_name' => DbSchemaResource::class,
+        Schema::RESOURCE_NAME => [
+            'name'       => Schema::RESOURCE_NAME,
+            'class_name' => Schema::class,
             'label'      => 'Schema',
         ],
         Table::RESOURCE_NAME            => [
@@ -42,7 +41,7 @@ class Couchbase extends BaseDbService
 
         $this->dbConn = new CouchbaseConnection($host, $port, $username, $password);
         /** @noinspection PhpParamsInspection */
-        $this->schema = new Schema($this->dbConn);
+        $this->schema = new \DreamFactory\Core\Couchbase\Database\Schema\Schema($this->dbConn);
         $this->schema->setCache($this);
         $this->schema->setExtraStore($this);
     }

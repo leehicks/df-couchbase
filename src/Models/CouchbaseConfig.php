@@ -2,10 +2,13 @@
 
 namespace DreamFactory\Core\Couchbase\Models;
 
+use DreamFactory\Core\Database\Components\SupportsUpsert;
 use DreamFactory\Core\Models\BaseServiceConfigModel;
 
 class CouchbaseConfig extends BaseServiceConfigModel
 {
+    use SupportsUpsert;
+
     /** @var string */
     protected $table = 'couchbase_config';
 
