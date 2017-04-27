@@ -4,7 +4,6 @@ namespace DreamFactory\Core\Couchbase\Components;
 
 use CouchbaseCluster;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
-use DreamFactory\Library\Utility\ArrayUtils;
 
 class CouchbaseConnection
 {
@@ -106,7 +105,7 @@ class CouchbaseConnection
     public function updateBucket($name, array $options = [])
     {
         $buckets = $this->cbClusterManager->listBuckets();
-        $bucketInfo = ArrayUtils::findByKeyValue($buckets, 'name', $name);
+        $bucketInfo = array_by_key_value($buckets, 'name', $name);
         $url = 'http://' . $this->host . array_get($bucketInfo, 'uri');
         $curlOptions = [
             CURLOPT_URL            => $url,
