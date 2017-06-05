@@ -7,13 +7,12 @@ use DreamFactory\Core\Couchbase\Services\Couchbase;
 use DreamFactory\Core\Database\Resources\BaseNoSqlDbTableResource;
 use DreamFactory\Core\Enums\ApiOptions;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
-use DreamFactory\Library\Utility\Scalar;
 use DreamFactory\Core\Enums\DbLogicalOperators;
 use DreamFactory\Core\Enums\DbComparisonOperators;
 use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Exceptions\BadRequestException;
 use DreamFactory\Core\Exceptions\ForbiddenException;
-use DreamFactory\Library\Utility\Enums\Verbs;
+use DreamFactory\Core\Enums\Verbs;
 use DreamFactory\Core\Exceptions\RestException;
 
 class Table extends BaseNoSqlDbTableResource
@@ -64,7 +63,7 @@ class Table extends BaseNoSqlDbTableResource
     {
         $this->transactionTable = $table;
         $fields = array_get($extras, ApiOptions::FIELDS);
-        $includeCounts = Scalar::boolval(array_get($extras, ApiOptions::INCLUDE_COUNT));
+        $includeCounts = array_get_bool($extras, ApiOptions::INCLUDE_COUNT);
         $limit = array_get($extras, 'limit', static::getMaxRecordsReturnedLimit());
         $offset = array_get($extras, 'offset');
         $orderBy = array_get($extras, 'order_by');
