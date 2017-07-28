@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+## [0.6.0] - 2017-07-27
+- Cleanup service config usage
 
 ## [0.5.0] - 2017-06-05
 ### Changed
@@ -25,7 +27,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## 0.1.0 - 2016-11-15
 First official release of this library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.2.0...0.3.0
