@@ -26,18 +26,12 @@ class Couchbase extends BaseDbService
         ],
     ];
 
-    /** {@inheritdoc} */
-    public function __construct(array $settings)
+    protected function initializeConnection()
     {
-        parent::__construct($settings);
-
-        $config = (array)array_get($settings, 'config');
-        Session::replaceLookups($config, true);
-
-        $host = array_get($config, 'host', '127.0.0.1');
-        $port = array_get($config, 'port', 8091);
-        $username = array_get($config, 'username');
-        $password = array_get($config, 'password');
+        $host = array_get($this->config, 'host', '127.0.0.1');
+        $port = array_get($this->config, 'port', 8091);
+        $username = array_get($this->config, 'username');
+        $password = array_get($this->config, 'password');
 
         $this->dbConn = new CouchbaseConnection($host, $port, $username, $password);
         /** @noinspection PhpParamsInspection */
