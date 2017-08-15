@@ -6,7 +6,6 @@ use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Couchbase\Resources\Schema;
 use DreamFactory\Core\Couchbase\Resources\Table;
 use DreamFactory\Core\Database\Services\BaseDbService;
-use DreamFactory\Core\Utility\Session;
 
 class Couchbase extends BaseDbService
 {
@@ -36,7 +35,5 @@ class Couchbase extends BaseDbService
         $this->dbConn = new CouchbaseConnection($host, $port, $username, $password);
         /** @noinspection PhpParamsInspection */
         $this->schema = new \DreamFactory\Core\Couchbase\Database\Schema\Schema($this->dbConn);
-        $this->schema->setCache($this);
-        $this->schema->setExtraStore($this);
     }
 }
