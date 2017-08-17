@@ -25,6 +25,16 @@ class Couchbase extends BaseDbService
         ],
     ];
 
+    public function __construct($settings = [])
+    {
+        parent::__construct($settings);
+
+        $host = array_get($this->config, 'host', '127.0.0.1');
+        $port = array_get($this->config, 'port', 8091);
+        $username = array_get($this->config, 'username');
+        $this->setConfigBasedCachePrefix($host . $port . $username . ':');
+    }
+
     protected function initializeConnection()
     {
         $host = array_get($this->config, 'host', '127.0.0.1');
