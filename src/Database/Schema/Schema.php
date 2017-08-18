@@ -66,7 +66,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     /**
      * @inheritdoc
      */
-    protected function updateTable($tableSchema, $changes)
+    public function updateTable($tableSchema, $changes)
     {
         $data = ['name' => $tableSchema->quotedName];
         foreach (CouchbaseConnection::$editableBucketProperties as $prop) {
@@ -88,7 +88,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     /**
      * @inheritdoc
      */
-    protected function createFieldReferences($references)
+    public function createFieldReferences($references)
     {
         // Do nothing here for now
     }
@@ -96,7 +96,7 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     /**
      * @inheritdoc
      */
-    protected function createFieldIndexes($indexes)
+    public function createFieldIndexes($indexes)
     {
         // Do nothing here for now
     }
