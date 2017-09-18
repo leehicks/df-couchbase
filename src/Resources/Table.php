@@ -5,20 +5,28 @@ namespace DreamFactory\Core\Couchbase\Resources;
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
 use DreamFactory\Core\Couchbase\Services\Couchbase;
 use DreamFactory\Core\Database\Resources\BaseNoSqlDbTableResource;
+use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Enums\ApiOptions;
-use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use DreamFactory\Core\Enums\DbLogicalOperators;
 use DreamFactory\Core\Enums\DbComparisonOperators;
-use DreamFactory\Core\Database\Schema\ColumnSchema;
+use DreamFactory\Core\Enums\Verbs;
 use DreamFactory\Core\Exceptions\BadRequestException;
 use DreamFactory\Core\Exceptions\ForbiddenException;
-use DreamFactory\Core\Enums\Verbs;
+use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use DreamFactory\Core\Exceptions\RestException;
 
 class Table extends BaseNoSqlDbTableResource
 {
+    //*************************************************************************
+    //	Constants
+    //*************************************************************************
+
     /** ID Field */
     const ID_FIELD = '_id';
+
+    //*************************************************************************
+    //	Members
+    //*************************************************************************
 
     /**
      * @var null|Couchbase
@@ -34,27 +42,6 @@ class Table extends BaseNoSqlDbTableResource
      * @var int An internal counter
      */
     private $i = 1;
-
-    /**
-     * @return CouchbaseConnection
-     */
-    protected function getConnection()
-    {
-        return $this->parent->getConnection();
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    protected function getIdsInfo($table, $fields_info = null, &$requested_fields = null, $requested_types = null)
-    {
-        $requested_fields = [static::ID_FIELD]; // can only be this
-        $ids = [
-            new ColumnSchema(['name' => static::ID_FIELD, 'type' => 'string', 'required' => true]),
-        ];
-
-        return $ids;
-    }
 
     /**
      * {@inheritdoc}
@@ -132,6 +119,27 @@ class Table extends BaseNoSqlDbTableResource
         }
 
         return $out;
+    }
+
+    /**
+     * @return CouchbaseConnection
+     */
+    protected function getConnection()
+    {
+        return $this->parent->getConnection();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getIdsInfo($table, $fields_info = null, &$requested_fields = null, $requested_types = null)
+    {
+        $requested_fields = [static::ID_FIELD]; // can only be this
+        $ids = [
+            new ColumnSchema(['name' => static::ID_FIELD, 'type' => 'string', 'required' => true]),
+        ];
+
+        return $ids;
     }
 
     /**
