@@ -13,7 +13,12 @@ class CouchbaseConfig extends BaseServiceConfigModel
     protected $table = 'couchbase_config';
 
     /** @var array */
-    protected $fillable = ['service_id', 'host', 'username', 'password'];
+    protected $fillable = ['service_id', 'host', 'port', 'username', 'password'];
+
+    protected $casts = [
+        'service_id' => 'integer',
+        'port'       => 'integer',
+    ];
 
     /** @var array */
     protected $encrypted = ['password'];
@@ -39,11 +44,11 @@ class CouchbaseConfig extends BaseServiceConfigModel
                 break;
             case 'username':
                 $schema['label'] = 'Username';
-                $schema['description'] = 'Couchbase Admin User';
+                $schema['description'] = 'Couchbase User';
                 break;
             case 'password':
                 $schema['label'] = 'Password';
-                $schema['description'] = 'Couchbase Admin Password';
+                $schema['description'] = 'Couchbase Password';
                 break;
         }
     }
