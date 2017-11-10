@@ -89,7 +89,7 @@ class Table extends BaseNoSqlDbTableResource
 
         $sql = $selectClause . $whereClause . $groupByClause . $orderByClause . $limitClause . $offsetClause;
         $out = [];
-        if ($bucket = $this->getBucket($this->getTableSchema(null,$table))) {
+        if ($bucket = $this->getBucket($this->parent->getTableSchema($table))) {
             try {
                 $query = \CouchbaseN1qlQuery::fromString($sql);
                 if (!empty($params)) {
