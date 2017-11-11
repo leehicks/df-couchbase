@@ -51,7 +51,7 @@ class Table extends BaseNoSqlDbTableResource
         $this->transactionTable = $table;
         $fields = array_get($extras, ApiOptions::FIELDS);
         $includeCounts = array_get_bool($extras, ApiOptions::INCLUDE_COUNT);
-        $limit = array_get($extras, 'limit', static::getMaxRecordsReturnedLimit());
+        $limit = array_get($extras, 'limit', $this->getMaxRecordsReturnedLimit());
         $offset = array_get($extras, 'offset');
         $orderBy = array_get($extras, 'order_by');
         $groupBy = array_get($extras, 'group_by');
