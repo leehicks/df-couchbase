@@ -3,8 +3,13 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+## [0.10.0] - 2017-12-28
 ### Added
 - DF-1224 Added ability to set different default limits (max_records_returned) per service
+- Added package discovery
+- DF-1186 Added exceptions for missing data when generating relationships
+### Changed
+- Separated resources from resource handlers
 
 ## [0.9.0] - 2017-11-03
 - Fix port casting as integer
@@ -43,7 +48,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## 0.1.0 - 2016-11-15
 First official release of this library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.9.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.10.0...HEAD
+[0.10.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.9.0...0.10.0
 [0.9.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/dreamfactorysoftware/df-couchbase/compare/0.6.0...0.7.0
