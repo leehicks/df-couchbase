@@ -22,13 +22,13 @@
     }
   ],
   "support":     {
-    "email":  "support@dreamfactory.com",
+    "email":  "dspsupport@dreamfactory.com",
     "source": "https://github.com/dreamfactorysoftware/df-couchbase",
     "issues": "https://github.com/dreamfactorysoftware/df-couchbase/issues",
     "wiki":   "https://wiki.dreamfactory.com"
   },
   "require":     {
-    "dreamfactory/df-database": "~0.8.0"
+    "dreamfactory/df-database": "~0.9.0"
   },
   "autoload":    {
     "psr-4": {
@@ -37,7 +37,12 @@
   },
   "extra":       {
     "branch-alias": {
-      "dev-develop": "0.9.x-dev"
+      "dev-develop": "0.10.x-dev"
+    },
+    "laravel": {
+      "providers": [
+        "DreamFactory\\Core\\Couchbase\\ServiceProvider"
+      ]
     }
   }
 }

@@ -3,28 +3,11 @@
 namespace DreamFactory\Core\Couchbase\Services;
 
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
-use DreamFactory\Core\Couchbase\Resources\Schema;
 use DreamFactory\Core\Couchbase\Resources\Table;
 use DreamFactory\Core\Database\Services\BaseDbService;
 
 class Couchbase extends BaseDbService
 {
-    /**
-     * @var array
-     */
-    protected static $resources = [
-        Schema::RESOURCE_NAME => [
-            'name'       => Schema::RESOURCE_NAME,
-            'class_name' => Schema::class,
-            'label'      => 'Schema',
-        ],
-        Table::RESOURCE_NAME            => [
-            'name'       => Table::RESOURCE_NAME,
-            'class_name' => Table::class,
-            'label'      => 'Table',
-        ],
-    ];
-
     public function __construct($settings = [])
     {
         parent::__construct($settings);
@@ -33,6 +16,19 @@ class Couchbase extends BaseDbService
         $port = array_get($this->config, 'port', 8091);
         $username = array_get($this->config, 'username');
         $this->setConfigBasedCachePrefix($host . $port . $username . ':');
+    }
+
+    public function getResourceHandlers()
+    {
+        $handlers = parent::getResourceHandlers();
+
+        $handlers[Table::RESOURCE_NAME] = [
+            'name'       => Table::RESOURCE_NAME,
+            'class_name' => Table::class,
+            'label'      => 'Table',
+        ];
+
+        return $handlers;
     }
 
     protected function initializeConnection()
