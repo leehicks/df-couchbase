@@ -3,6 +3,7 @@
 namespace DreamFactory\Core\Couchbase\Database\Schema;
 
 use DreamFactory\Core\Couchbase\Components\CouchbaseConnection;
+use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 
@@ -14,22 +15,24 @@ class Schema extends \DreamFactory\Core\Database\Components\Schema
     /**
      * @inheritdoc
      */
-    protected function findColumns(TableSchema $table)
+    protected function loadTableColumns(TableSchema $table)
     {
-        return [
-            [
-                'name'           => '_id',
-                'db_type'        => 'string',
-                'is_primary_key' => true,
-                'auto_increment' => false,
-            ]
-        ];
+        $table->addPrimaryKey('_id');
+        $c = new ColumnSchema([
+            'name'           => '_id',
+            'db_type'        => 'string',
+            'is_primary_key' => true,
+            'auto_increment' => false,
+        ]);
+        $c->quotedName = $this->quoteColumnName($c->name);
+
+        $table->addColumn($c);
     }
 
     /**
      * @inheritdoc
      */
-    protected function findTableNames($schema = '')
+    protected function getTableNames($schema = '')
     {
         $tables = [];
         $buckets = $this->connection->getCbClusterManager()->listBuckets();
